@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>نموذج حساب Utilization</title>
+<title>Employee Utilization Tracker</title>
 <style>
 body {
-  font-family: "Cairo", sans-serif;
-  background: linear-gradient(135deg, #6a11cb, #2575fc);
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #4a00e0, #8e2de2);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -15,34 +15,32 @@ body {
 }
 .container {
   background: #fff;
-  padding: 25px 30px;
+  padding: 30px;
   border-radius: 15px;
-  box-shadow: 0px 6px 15px rgba(0,0,0,0.15);
-  width: 450px;
+  box-shadow: 0px 6px 20px rgba(0,0,0,0.2);
+  width: 500px;
 }
-h2 { text-align: center; margin-bottom: 20px; color: #333; }
-label { display: block; margin: 10px 0 5px; }
-select, input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 8px; }
-button { margin-top: 15px; width: 100%; padding: 10px; background: #2575fc; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
-button:hover { background: #1b5edb; }
-.result { margin-top: 20px; font-size: 16px; text-align: center; font-weight: bold; color: #333; background: #f7f7f7; padding: 10px; border-radius: 10px; }
+h2 { text-align: center; margin-bottom: 25px; color: #333; }
+label { display: block; margin: 12px 0 6px; font-weight: bold; }
+input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+button { margin-top: 20px; width: 100%; padding: 12px; background: #8e2de2; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
+button:hover { background: #4a00e0; }
+.result { margin-top: 25px; font-size: 16px; text-align: center; font-weight: bold; color: #333; background: #f2f2f2; padding: 12px; border-radius: 10px; }
 </style>
 </head>
 <body>
+
 <div class="container">
-<h2>حساب Utilization</h2>
+<h2>Employee Utilization Tracker</h2>
 
-<label for="agent">اختر الموظف:</label>
-<select id="agent"><option>⏳ جاري تحميل الأسماء...</option></select>
+<label for="workedHours">Hours Worked:</label>
+<input type="number" id="workedHours" placeholder="e.g., 8">
 
-<label for="workedHours">عدد الساعات اللي اشتغلها:</label>
-<input type="number" id="workedHours" placeholder="مثال: 8">
+<label for="breakHours">Break Hours:</label>
+<input type="number" id="breakHours" placeholder="e.g., 1">
 
-<label for="breakHours">عدد ساعات البريك:</label>
-<input type="number" id="breakHours" placeholder="مثال: 1">
-
-<button onclick="calculateUtilization()">احسب</button>
-<button onclick="saveToSheet()">💾 احفظ النتيجة</button>
+<button onclick="calculateUtilization()">Calculate</button>
+<button onclick="saveToSheet()">💾 Save Result</button>
 
 <div class="result" id="result"></div>
 </div>
@@ -52,68 +50,59 @@ const url = "https://script.google.com/macros/s/AKfycbw4lKeDXLul2_L8P6fd3__NLfJC
 let sheetData = [];
 let lastResult = null;
 
-// تحميل أسماء الموظفين
-async function loadAgents() {
+// Fetch all employees from Google Sheet automatically
+async function loadEmployees() {
   try {
     const response = await fetch(url);
     const data = await response.json();
-    sheetData = data.slice(1);
-
-    const agentSelect = document.getElementById("agent");
-    agentSelect.innerHTML = "<option value=''>-- اختر الموظف --</option>";
-    sheetData.forEach(row => {
-      const name = row[0];
-      if(name){
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        agentSelect.appendChild(option);
-      }
-    });
+    sheetData = data.slice(1); // skip header
   } catch(err) {
-    document.getElementById("agent").innerHTML = "<option>❌ خطأ في تحميل الأسماء</option>";
+    document.getElementById("result").innerHTML = "❌ Error loading employee data.";
     console.error(err);
   }
 }
 
-// حساب Utilization
 function calculateUtilization() {
-  const agent = document.getElementById("agent").value;
+  if(sheetData.length === 0){
+    document.getElementById("result").innerHTML = "⚠️ Employee data not loaded yet.";
+    return;
+  }
+
   const workedHours = parseFloat(document.getElementById("workedHours").value);
   const breakHours = parseFloat(document.getElementById("breakHours").value);
   const resultDiv = document.getElementById("result");
 
-  if(!agent || isNaN(workedHours) || isNaN(breakHours)){
-    resultDiv.innerHTML = "⚠️ من فضلك أدخل جميع البيانات.";
+  if(isNaN(workedHours) || isNaN(breakHours)){
+    resultDiv.innerHTML = "⚠️ Please enter valid hours.";
     return;
   }
 
-  const employee = sheetData.find(r => r[0] === agent);
-  if(!employee){
-    resultDiv.innerHTML = "⚠️ الموظف غير موجود في الشيت.";
-    return;
-  }
+  let outputHTML = "";
+  sheetData.forEach(employee => {
+    const name = employee[0];
+    const callDuration = parseFloat(employee[1]) || 0;
+    const callsCount = parseInt(employee[2]) || 0;
 
-  const callDuration = parseFloat(employee[1]) || 0;
-  const callsCount = parseInt(employee[2]) || 0;
+    const netHours = workedHours - breakHours;
+    const utilization = (callDuration / netHours) * 100;
 
-  const netHours = workedHours - breakHours;
-  const utilization = (callDuration / netHours) * 100;
+    outputHTML += `
+      👤 ${name}<br>
+      ⏱️ Call Duration: ${callDuration} hours<br>
+      📞 Calls Count: ${callsCount}<br>
+      🕒 Net Hours Worked: ${netHours}<br>
+      📊 Utilization: ${utilization.toFixed(2)}%<hr>
+    `;
 
-  lastResult = { agent, workedHours, breakHours, callDuration, callsCount, utilization };
+    lastResult = { name, workedHours, breakHours, callDuration, callsCount, utilization };
+  });
 
-  resultDiv.innerHTML = `
-    👤 الموظف: ${agent}<br>
-    ⏱️ مدة المكالمات: ${callDuration} ساعة<br>
-    📞 عدد المكالمات: ${callsCount}<br>
-    🕒 ساعات العمل الفعلية: ${netHours}<br>
-    📊 نسبة Utilization = ${utilization.toFixed(2)}%
-  `;
+  resultDiv.innerHTML = outputHTML;
 }
 
-// حفظ النتيجة في الشيت
+// Save results to Google Sheet
 async function saveToSheet() {
-  if(!lastResult){ alert("⚠️ احسب أولاً قبل الحفظ."); return; }
+  if(!lastResult){ alert("⚠️ Please calculate first."); return; }
 
   try{
     const response = await fetch(url, {
@@ -121,15 +110,15 @@ async function saveToSheet() {
       body: JSON.stringify(lastResult)
     });
     const result = await response.text();
-    alert("✅ تم حفظ النتيجة في الشيت.");
+    alert("✅ Result saved successfully.");
   } catch(err){
-    alert("❌ حصل خطأ أثناء الحفظ.");
+    alert("❌ Error saving result.");
     console.error(err);
   }
 }
 
-loadAgents();
+loadEmployees();
 </script>
+
 </body>
 </html>
-
